@@ -2,7 +2,7 @@
 # how to run test?
 python issue.py
 
-then you will see results as below, as you can see, tensorrt model with extra tensor operations make the whole inference time increase
+then you will see results as below, as you can see, tensorrt model with extra GPU to CPU tensor operations make the whole inference time increase
 
 ```100%|█████████████████████████████████████████████████████████████████████████████████████████████| 10/10 [00:00<00:00, 238.90it/s]
 with no gpu 2 cpu operation test result: >>>>>>>>>>>>>>>>> 
