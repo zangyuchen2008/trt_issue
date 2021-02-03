@@ -31,7 +31,7 @@ def load_trt_model_dynamic(model_path):
     model_trt.load_state_dict(torch.load(model_path))
     return model_trt
 
-def test(gpu2cpu_op=False,):
+def test(gpu2cpu_op=False,synchronize=False,device=None):
     trt_times=[]
     raw_times=[]
     for _ in tqdm(range(10)):
@@ -41,6 +41,8 @@ def test(gpu2cpu_op=False,):
         if gpu2cpu_op:
             if hidden[0,0,0]: pass
             # hidden[:,0,2].tolist() 
+        if synchronize:
+            torch.cuda.synchronize(device)
         e = time.time()
         s1 = time.time()
         hidden = dec_layer0(decoder_layer_hidden_states,encoder_hidden_states=de_encoder_hidden_states,
@@ -48,13 +50,19 @@ def test(gpu2cpu_op=False,):
         if gpu2cpu_op:
             if hidden[0][0,0,0]: pass
             # hidden[0][:,0,2].tolist()
+        if synchronize:
+            torch.cuda.synchronize(device)
         e1 = time.time()
         trt_times.append(e-s)
         raw_times.append(e1-s1)
     if gpu2cpu_op:
-        print('with gpu 2 cpu operation test result: >>>>>>>>>>>>>>>>> ')
+        print('test with gpu 2 cpu operation: >>>>>>>>>>>>>>>>> ')
     else:
-        print('with no gpu 2 cpu operation test result: >>>>>>>>>>>>>>>>> ')
+        print('test with no gpu 2 cpu operation: >>>>>>>>>>>>>>>>> ')
+    if synchronize:
+        print('test with cuda synchronize: >>>>>>>>>>>>>>>>> ')
+    else:
+        print('test with no cuda synchronize: >>>>>>>>>>>>>>>>> ')
     print('average time of raw model is {}'.format(sum(raw_times)/len(raw_times)))
     print('average time of trt model is {}'.format(sum(trt_times)/len(trt_times)))
     print('acceleration of trt model is {}'.format(sum(raw_times)/sum(trt_times)))  
@@ -76,5 +84,8 @@ de_encoder_hidden_states = torch.tensor(np.random.normal(size =(10,128,1024))).t
 de_encoder_layer_attention_mask =  torch.zeros((10,1,1,128),dtype=torch.float32).to(device)
 decoder_layer_attention_mask = torch.tensor(np.random.normal(size =(10,1,1,1))).type(torch.float32).to(device)
 
-test(False)
-test(True)
+test(False,False,device)
+test(True,False,device)
+
+test(False,True,device)
+test(True,True,device)
