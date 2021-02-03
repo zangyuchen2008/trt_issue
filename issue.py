@@ -191,9 +191,8 @@ decoder_layer_attention_mask = torch.tensor(np.random.normal(size =(10,1,1,1))).
 # start to test
 test(False,False,device)
 test(True,False,device)
-
 # test(False,True,device)
 # test(True,True,device)
 
 # converting to tensorrt model
-decoder_layer_trt = decoderlayer_convertor_dynamic(decoder.layers[0],device,first_token=True)
+# decoder_layer_trt = decoderlayer_convertor_dynamic(decoder.layers[0],device,first_token=True)
