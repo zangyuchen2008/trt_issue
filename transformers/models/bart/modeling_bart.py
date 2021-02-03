@@ -545,13 +545,13 @@ class BartDecoderLayer(nn.Module):
             # hidden_states = self.final_layer_norm(hidden_states)
             hidden_states = simple_laynorm(self.final_layer_norm,hidden_states)
         # torch2trt modified
-        return (
-            hidden_states,
-            self_attn_weights,
-            present_key_value,
-            cross_attn_weights,
-        )
-        # return hidden_states
+        # return (
+        #     hidden_states,
+        #     self_attn_weights,
+        #     present_key_value,
+        #     cross_attn_weights,
+        # )
+        return hidden_states
 
 
 class BartClassificationHead(nn.Module):

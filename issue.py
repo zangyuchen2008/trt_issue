@@ -31,6 +31,110 @@ def load_trt_model_dynamic(model_path):
     model_trt.load_state_dict(torch.load(model_path))
     return model_trt
 
+def decoderlayer_convertor_dynamic(decoder_layer,device,first_token=True): 
+    decoder_layer_hidden_states = torch.tensor(np.random.normal(size =(10,1,1024))).type(torch.float32).to(device)
+    de_encoder_hidden_states = torch.tensor(np.random.normal(size =(10,128,1024))).type(torch.float32).to(device)
+    de_encoder_layer_attention_mask =  torch.zeros((10,1,1,128),dtype=torch.float32).to(device)
+    decoder_layer_attention_mask = torch.tensor(np.random.normal(size =(10,1,1,1))).type(torch.float32).to(device)
+    # decoder_layer = decoder.layers[1]    
+    # output_attentions = False
+    # dmin,dopt,dmax = dyna_dim
+    opt_shape_param = [
+        [
+            [10,1,1024],   # min
+            [10,128,1024],   # opt
+            [10,256,1024]    # max
+        ],
+        [
+            [10,128,1024],   # min
+            [10,128,1024],   # opt
+            [10,128,1024]    # max
+        ],
+        [
+            [10,1,1,128],    # min
+            [10,1,128,128],   # opt
+            [10,1,256,128]    # max
+        ],
+    ]
+
+    opt_shape_param_mask = [
+        [
+            [10,1,1024],   # min
+            [10,128,1024],   # opt
+            [10,256,1024]    # max
+        ],
+        [
+            [10,128,1024],   # min
+            [10,128,1024],   # opt
+            [10,128,1024]    # max
+        ],
+        [
+            [10,1,1,128],    # min
+            [10,1,128,128],   # opt
+            [10,1,256,128]    # max
+        ],
+        [
+            [10,1,1,1],    # min
+            [10,1,128,128],   # opt
+            [10,1,256,256]    # max
+        ],
+    ]
+    # decoder_layer_output = decoder_layer(decoder_layer_hidden_states)
+    # decoder_layer_tensorrt = torch2trt_dynamic.torch2trt_dynamic(decoder_layer, [decoder_layer_hidden_states], fp16_mode=False, opt_shape_param=opt_shape_param)
+    if first_token:
+        decoder_layer_output = decoder_layer(decoder_layer_hidden_states,encoder_hidden_states=de_encoder_hidden_states,
+        encoder_attention_mask=de_encoder_layer_attention_mask)
+        decoder_layer_tensorrt = torch2trt_dynamic.torch2trt_dynamic(decoder_layer, [decoder_layer_hidden_states,de_encoder_hidden_states
+        ,de_encoder_layer_attention_mask], fp16_mode=False, opt_shape_param=opt_shape_param)
+    else:
+        decoder_layer_output = decoder_layer(decoder_layer_hidden_states,encoder_hidden_states=de_encoder_hidden_states,
+        encoder_attention_mask=de_encoder_layer_attention_mask,attention_mask = decoder_layer_attention_mask )
+        decoder_layer_tensorrt = torch2trt_dynamic.torch2trt_dynamic(decoder_layer, [decoder_layer_hidden_states,de_encoder_hidden_states
+        ,de_encoder_layer_attention_mask,decoder_layer_attention_mask], fp16_mode=False, opt_shape_param=opt_shape_param_mask)        
+
+    times = []
+    raw_times=[]
+    tensorrt_times=[]
+    decoder_layer_hidden_states = torch.tensor(np.random.normal(size =(10,64,1024))).type(torch.float32).to(device)
+    de_encoder_hidden_states = torch.tensor(np.random.normal(size =(10,128,1024))).type(torch.float32).to(device)
+    de_encoder_layer_attention_mask =  torch.zeros((10,1,64,128),dtype=torch.float32).to(device)
+    decoder_layer_attention_mask = torch.tensor(np.random.normal(size =(10,1,64,64))).type(torch.float32).to(device)
+    for _ in range(100):
+        start = time.time()
+        if first_token:
+            y = decoder_layer(decoder_layer_hidden_states,encoder_hidden_states=de_encoder_hidden_states,
+            encoder_attention_mask=de_encoder_layer_attention_mask)
+        else:
+            y = decoder_layer(decoder_layer_hidden_states,encoder_hidden_states=de_encoder_hidden_states,
+            encoder_attention_mask=de_encoder_layer_attention_mask,attention_mask = decoder_layer_attention_mask)
+        # y = decoder_layer(decoder_layer_hidden_states)
+        torch.cuda.synchronize(device)
+        end = time.time()
+
+        raw_time = end - start
+        start = time.time()
+        if first_token:
+            y_trt = decoder_layer_tensorrt(decoder_layer_hidden_states,de_encoder_hidden_states,
+            de_encoder_layer_attention_mask)
+        else:
+            y_trt = decoder_layer_tensorrt(decoder_layer_hidden_states,de_encoder_hidden_states,
+            de_encoder_layer_attention_mask,decoder_layer_attention_mask)            
+        # y_trt = decoder_layer_tensorrt(decoder_layer_hidden_states)
+        torch.cuda.synchronize(device)
+        end = time.time()
+
+        tensorrt_time = end - start
+        raw_times.append(raw_time)
+        tensorrt_times.append(tensorrt_time)
+        times.append(raw_time / tensorrt_time)
+    print("raw model time is {}".format(sum(raw_times)/len(raw_times)))
+    print("tesnorrt model time is {}".format(sum(tensorrt_times)/len(tensorrt_times)))
+    print("coresponding tensorrt model is {} times faster".format(sum(times)/len(times)))
+    # check the output against PyTorch
+    print(torch.max(torch.abs(y - y_trt)))
+    return decoder_layer_tensorrt
+
+
 def test(gpu2cpu_op=False,synchronize=False,device=None):
     trt_times=[]
     raw_times=[]
@@ -84,8 +188,12 @@ de_encoder_hidden_states = torch.tensor(np.random.normal(size =(10,128,1024))).t
 de_encoder_layer_attention_mask =  torch.zeros((10,1,1,128),dtype=torch.float32).to(device)
 decoder_layer_attention_mask = torch.tensor(np.random.normal(size =(10,1,1,1))).type(torch.float32).to(device)
 
+# start to test
 test(False,False,device)
 test(True,False,device)
 
-test(False,True,device)
-test(True,True,device)
+# test(False,True,device)
+# test(True,True,device)
+
+# converting to tensorrt model
+decoder_layer_trt = decoderlayer_convertor_dynamic(decoder.layers[0],device,first_token=True)
